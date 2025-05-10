@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Drawing Pad Pro - Advanced V2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation;
+            background-color: #e5e7eb; /* gray-200 */
+            overflow: hidden;
+            color: #374151; /* gray-700 */
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            background-color: #f9fafb; /* gray-50 */
+        }
+
+        .top-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px; /* Slightly reduced padding */
+            background-color: #ffffff;
+            border-bottom: 1px solid #d1d5db; /* gray-300 */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 8px; /* Reduced gap */
+        }
+
+        .toolbar-group { display: flex; align-items: center; gap: 8px; }
+
+        #quickColorPalette .color-swatch {
+            width: 24px; height: 24px; /* Slightly smaller */
+            border-radius: 50%; cursor: pointer; border: 2px solid #d1d5db;
+            transition: transform 0.2s, box-shadow 0.2s; position: relative;
+        }
+        #quickColorPalette .color-swatch:hover { transform: scale(1.1); }
+        #quickColorPalette .color-swatch.selected {
+            transform: scale(1.15); box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #2563eb; /* blue-600 */
+            border-color: #2563eb;
+        }
+        .hidden-color-input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; top:0; left:0; }
+
+        .pen-selector-container { display: flex; align-items: center; gap: 5px; }
+        .pen-selector-container #penIconLabel { font-size: 1.1rem; color: #374151; }
+        .pen-selector select {
+            padding: 5px 8px; border-radius: 6px; border: 1px solid #d1d5db;
+            background-color: #f9fafb; font-size: 0.85rem; color: #374151; cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .pen-selector select:hover { border-color: #9ca3af; }
+        .pen-selector select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
+
+        .tool-control { display: flex; align-items: center; gap: 5px; }
+        .tool-control label { font-size: 1rem; color: #4b5563; cursor: pointer; }
+        .tool-control input[type="range"] { width: 70px; accent-color: #2563eb; }
+        .tool-control #lineWidthValue { font-size: 0.75rem; color: #1f2937; min-width: 16px; text-align: right; }
+        .tool-control input[type="color"] {
+            width: 24px; height: 24px; border: none; padding: 0;
+            border-radius: 50%; cursor: pointer; background-color: transparent;
+        }
+        .tool-control input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        .tool-control input[type="color"]::-webkit-color-swatch { border: 1px solid #d1d5db; border-radius: 50%; }
+
+        .canvas-area {
+            flex-grow: 1; position: relative; background-color: #d1d5db;
+            display: flex; overflow: hidden;
+        }
+        #drawingCanvas {
+            display: block; cursor: crosshair; touch-action: none;
+            max-width: 100%; max-height: 100%; margin: auto;
+            /* background-color is set by JS */
+        }
+
+        .bottom-controls {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 12px; background-color: #ffffff;
+            border-top: 1px solid #d1d5db; gap: 8px; flex-shrink: 0; flex-wrap: wrap;
+        }
+        #describeButtonContainer { flex-grow: 1; display: flex; justify-content: center; }
+        #descriptionArea {
+            padding: 7px 10px; background-color: #e5e7eb; border-radius: 6px;
+            color: #374151; font-size: 0.85rem; min-height: 36px;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+            flex-basis: 180px; flex-grow: 2;
+        }
+        .action-button {
+            padding: 7px 12px; font-size: 0.85rem; font-weight: 500; border-radius: 6px;
+            transition: background-color 0.2s, transform 0.1s, box-shadow 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #d1d5db;
+            background-color: #f9fafb; color: #374151; display: flex; align-items: center; gap: 5px;
+        }
+        .action-button:hover:not(:disabled) {
+            transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.07);
+            border-color: #9ca3af; background-color: #f3f4f6;
+        }
+        .action-button:active:not(:disabled) { transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .action-button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #describeButton { background-color: #2563eb; color: white; border-color: #1d4ed8; }
+        #describeButton:hover:not(:disabled) { background-color: #1d4ed8; }
+
+        .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spinner-border .75s linear infinite; margin-left: 8px; }
+        @keyframes spinner-border { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="top-toolbar">
+            <div class="toolbar-group" id="quickColorPalette"></div>
+            <div class="toolbar-group pen-selector-container">
+                <label id="penIconLabel" for="penTypeSelector" title="Select Pen Type"><i class="fas fa-pen-fancy"></i></label>
+                <select id="penTypeSelector">
+                    <option value="fountain_pen">Fountain Pen</option>
+                    <option value="pencil">Pencil</option>
+                    <option value="brush">Brush</option>
+                    <option value="ball_pen">Ball Pen</option>
+                    <option value="sketch_pen">Sketch Pen</option>
+                    <option value="laser_pointer">Laser Pointer</option>
+                </select>
+            </div>
+            <div class="toolbar-group">
+                <div class="tool-control brush-size-control">
+                    <label for="lineWidth" title="Brush Size"><i class="fas fa-paint-brush"></i></label>
+                    <input type="range" id="lineWidth" min="1" max="100" value="5">
+                    <span id="lineWidthValue">5</span>
+                </div>
+                <div class="tool-control">
+                    <label for="canvasBgColorPicker" title="Canvas Background Color"><i class="fas fa-fill-drip"></i></label>
+                    <input type="color" id="canvasBgColorPicker" value="#FFFFFF">
+                </div>
+            </div>
+            <div class="toolbar-group">
+                 <button id="undoButton" class="action-button" title="Undo" disabled><i class="fas fa-undo"></i> Undo</button>
+                 <button id="redoButton" class="action-button" title="Redo" disabled><i class="fas fa-redo"></i> Redo</button>
+                 <button id="clearButton" class="action-button" title="Clear Drawing"><i class="fas fa-trash"></i> Clear</button>
+            </div>
+        </div>
+
+        <div class="canvas-area">
+            <canvas id="drawingCanvas"></canvas>
+        </div>
+
+        <div class="bottom-controls">
+            <div id="describeButtonContainer">
+                <button id="describeButton" class="action-button">
+                    <i class="fas fa-wand-magic-sparkles"></i> Describe Drawing
+                </button>
+            </div>
+            <div id="descriptionArea">Your drawing description will appear here.</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        let drawing = false;
+        let currentQuickSelectColors = ['#000000', '#EF4444', '#3B82F6'];
+        let selectedColor = currentQuickSelectColors[0];
+        let currentPenType = 'fountain_pen';
+        let currentLineWidth = 5;
+        let currentBackgroundColor = '#FFFFFF';
+        let tempBackgroundColor = currentBackgroundColor; // For BG color picker logic
+
+        let history = [];
+        let redoHistory = [];
+        const historyLimit = 30;
+
+        let laserStrokes = []; // For laser pointer
+
+        const quickColorPaletteEl = document.getElementById('quickColorPalette');
+        const penTypeSelector = document.getElementById('penTypeSelector');
+        const penIconLabel = document.getElementById('penIconLabel');
+        const lineWidthSlider = document.getElementById('lineWidth');
+        const lineWidthValueDisplay = document.getElementById('lineWidthValue');
+        const canvasBgColorPicker = document.getElementById('canvasBgColorPicker');
+        const describeButton = document.getElementById('describeButton');
+        const clearButton = document.getElementById('clearButton');
+        const undoButton = document.getElementById('undoButton');
+        const redoButton = document.getElementById('redoButton');
+        const descriptionArea = document.getElementById('descriptionArea');
+
+        const penIcons = {
+            pencil: 'fa-pencil-alt', brush: 'fa-paint-brush', fountain_pen: 'fa-pen-fancy',
+            ball_pen: 'fa-pen', sketch_pen: 'fa-marker', laser_pointer: 'fa-magic' // Or fa-bolt, fa-crosshairs
+        };
+
+        const penProperties = {
+            pencil: { baseWidth: 0.6, alpha: 0.5, cap: 'round', join: 'round', detail: 0.4, jitter: 0.2 },
+            brush: { baseWidth: 2.8, alpha: 0.8, cap: 'round', join: 'round', detail: 0 },
+            fountain_pen: { baseWidth: 1, alpha: 0.95, cap: 'round', join: 'round', detail: 0.6, minWidthFactor: 0.3 },
+            ball_pen: { baseWidth: 0.4, alpha: 0.9, cap: 'round', join: 'round', detail: 0 },
+            sketch_pen: { baseWidth: 1.8, alpha: 0.45, cap: 'butt', join: 'miter', detail: 0 },
+            laser_pointer: { baseWidth: 0.8, alpha: 1, cap: 'round', join: 'round', color: '#FF007F', duration: 2000, flashInterval: 200 } // Hot pink, 2s duration
+        };
+
+        function setInitialCanvasState(clearHistoryAndSave = false) {
+            const dpr = window.devicePixelRatio || 1;
+            // Clear with current background color
+            ctx.fillStyle = currentBackgroundColor;
+            ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr); // Use scaled dimensions for fillRect
+            applyCurrentPenStyle();
+
+            if (clearHistoryAndSave) {
+                history = []; redoHistory = [];
+                saveHistory();
+                updateUndoRedoButtons();
+            }
+        }
+
+        function applyCurrentPenStyle() {
+            const props = penProperties[currentPenType];
+            ctx.strokeStyle = (currentPenType === 'laser_pointer') ? props.color : selectedColor;
+            ctx.globalAlpha = props.alpha;
+            ctx.lineCap = props.cap;
+            ctx.lineJoin = props.join;
+            // Line width is handled dynamically in draw functions
+        }
+
+        function updatePenIcon() {
+            penIconLabel.innerHTML = `<i class="fas ${penIcons[currentPenType]}"></i>`;
+        }
+
+        function resizeCanvas() {
+            const canvasArea = document.querySelector('.canvas-area');
+            // Preserve content only if history exists (i.e., not initial blank state)
+            const tempImageData = history.length > 0 ? preserveCanvasContent() : null;
+            
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvasArea.clientWidth * dpr;
+            canvas.height = canvasArea.clientHeight * dpr;
+            canvas.style.width = `${canvasArea.clientWidth}px`;
+            canvas.style.height = `${canvasArea.clientHeight}px`;
+            ctx.scale(dpr, dpr);
+
+            setInitialCanvasState(); // This clears to current BG and sets styles
+            
+            if (tempImageData) {
+                restoreCanvasContent(tempImageData);
+                // Re-save the restored state as the current state in history to reflect new dimensions
+                if (history.length > 0) { // Only if there was something to restore
+                    history[history.length -1] = canvas.toDataURL();
+                }
+            } else if (history.length === 0 && canvas.width > 0 && canvas.height > 0) {
+                // If history was empty, save the initial blank state for the new size
+                saveHistory(true);
+            }
+            updateUndoRedoButtons();
+        }
+        
+        function isCanvasBlank() { return history.length === 0; } // Simplified
+        function preserveCanvasContent() { if (canvas.width > 0 && canvas.height > 0) { return ctx.getImageData(0, 0, canvas.width, canvas.height); } return null; }
+        function restoreCanvasContent(imageData) { if (imageData) { ctx.putImageData(imageData, 0, 0); } }
+        
+        let resizeTimeout;
+        window.addEventListener('resize', () => { clearTimeout(resizeTimeout); resizeTimeout = setTimeout(resizeCanvas, 150); });
+
+        function setupQuickColorPalette() {
+            quickColorPaletteEl.innerHTML = '';
+            currentQuickSelectColors.forEach((color, index) => {
+                const swatch = document.createElement('div');
+                swatch.classList.add('color-swatch');
+                swatch.style.backgroundColor = color;
+                swatch.title = `Quick Color ${index + 1} (Double-click to change)`;
+                if (color === selectedColor) swatch.classList.add('selected');
+
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'color';
+                hiddenInput.classList.add('hidden-color-input');
+                hiddenInput.value = color;
+                let tempQuickColor = color; // Store color during picker interaction
+
+                swatch.addEventListener('click', () => {
+                    selectedColor = color;
+                    applyCurrentPenStyle();
+                    document.querySelectorAll('#quickColorPalette .color-swatch').forEach(s => s.classList.remove('selected'));
+                    swatch.classList.add('selected');
+                });
+                swatch.addEventListener('dblclick', () => hiddenInput.click());
+                
+                hiddenInput.addEventListener('input', (e) => { // Fires as user drags picker
+                    tempQuickColor = e.target.value;
+                });
+                hiddenInput.addEventListener('change', (e) => { // Fires when picker is closed
+                    const newColor = tempQuickColor; // Use the last color from 'input'
+                    currentQuickSelectColors[index] = newColor;
+                    swatch.style.backgroundColor = newColor;
+                    hiddenInput.value = newColor; // Update picker's internal value
+                    if (swatch.classList.contains('selected')) { // If this was the active color
+                        selectedColor = newColor;
+                        applyCurrentPenStyle();
+                    }
+                });
+                swatch.appendChild(hiddenInput);
+                quickColorPaletteEl.appendChild(swatch);
+            });
+        }
+
+        penTypeSelector.addEventListener('change', (e) => {
+            currentPenType = e.target.value;
+            applyCurrentPenStyle();
+            updatePenIcon();
+            // Disable line width for laser pointer as it has fixed appearance
+            lineWidthSlider.disabled = currentPenType === 'laser_pointer';
+        });
+
+        lineWidthSlider.addEventListener('input', (e) => {
+            currentLineWidth = e.target.value;
+            updateLineWidthDisplay();
+            // No need to applyCurrentPenStyle() here, width is used in draw functions
+        });
+        function updateLineWidthDisplay() { lineWidthValueDisplay.textContent = currentLineWidth; }
+
+        canvasBgColorPicker.addEventListener('input', (e) => { // Fires as user drags picker
+            tempBackgroundColor = e.target.value;
+            // Optionally, preview BG change live:
+            // canvas.style.backgroundColor = tempBackgroundColor; // Or fill a temp canvas
+        });
+        canvasBgColorPicker.addEventListener('change', (e) => { // Fires when picker is closed
+            const newBgColor = tempBackgroundColor; // Use the last color from 'input'
+            if (newBgColor !== currentBackgroundColor) {
+                if (confirm(`Change background to ${newBgColor}? This will clear the current drawing.`)) {
+                    currentBackgroundColor = newBgColor;
+                    setInitialCanvasState(true); // True to clear history and save new blank state
+                } else {
+                    // Revert picker if cancelled
+                    canvasBgColorPicker.value = currentBackgroundColor;
+                    tempBackgroundColor = currentBackgroundColor; // Reset temp
+                }
+            }
+        });
+
+        let lastPos = null;
+        let currentLaserStroke = null;
+
+        function getPointerPos(evt) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = evt.clientX || (evt.touches && evt.touches[0] ? evt.touches[0].clientX : 0);
+            const clientY = evt.clientY || (evt.touches && evt.touches[0] ? evt.touches[0].clientY : 0);
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        function startDrawing(e) {
+            e.preventDefault();
+            drawing = true;
+            lastPos = getPointerPos(e);
+            applyCurrentPenStyle();
+            
+            if (currentPenType === 'laser_pointer') {
+                const props = penProperties.laser_pointer;
+                currentLaserStroke = { points: [lastPos], color: props.color, width: currentLineWidth * props.baseWidth, created: Date.now(), opacity: 1, lastActivity: Date.now() };
+                if (laserStrokes.length === 0) requestAnimationFrame(animateLaser); // Start animation loop if not running
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(lastPos.x, lastPos.y);
+                // Draw a dot for single tap/click for non-laser pens
+                const props = penProperties[currentPenType];
+                let LWidth = parseFloat(currentLineWidth) * props.baseWidth;
+                if (currentPenType === 'fountain_pen') {
+                     LWidth = Math.max(1, LWidth * (props.detail * 0.8 + (1 - props.detail))); // Adjusted dot for fountain
+                }
+                ctx.lineWidth = LWidth;
+                ctx.lineTo(lastPos.x, lastPos.y);
+                ctx.stroke();
+            }
+        }
+
+        function stopDrawing() {
+            if (!drawing) return;
+            drawing = false;
+            lastPos = null;
+            if (currentPenType === 'laser_pointer' && currentLaserStroke) {
+                laserStrokes.push(currentLaserStroke);
+                currentLaserStroke = null;
+            } else if (currentPenType !== 'laser_pointer') {
+                ctx.beginPath(); // Reset path for next stroke
+                saveHistory();
+            }
+        }
+
+        function draw(e) {
+            if (!drawing) return;
+            e.preventDefault();
+            const currentPos = getPointerPos(e);
+            if (!lastPos) { lastPos = currentPos; return; }
+
+            if (currentPenType === 'laser_pointer' && currentLaserStroke) {
+                currentLaserStroke.points.push(currentPos);
+                currentLaserStroke.lastActivity = Date.now(); // Update activity time
+                // Laser is drawn in animateLaser loop
+            } else {
+                const props = penProperties[currentPenType];
+                let LWidth = parseFloat(currentLineWidth) * props.baseWidth;
+
+                if (currentPenType === 'fountain_pen') {
+                    const dist = Math.sqrt(Math.pow(currentPos.x - lastPos.x, 2) + Math.pow(currentPos.y - lastPos.y, 2));
+                    const speedFactor = Math.min(1.5, Math.max(props.minWidthFactor, 1 - dist / (50 / props.detail) )); // More sensitive variation
+                    LWidth = Math.max(1, LWidth * speedFactor);
+                } else if (currentPenType === 'pencil') {
+                    LWidth = Math.max(1, LWidth * (1 + (Math.random() - 0.5) * props.jitter));
+                    ctx.globalAlpha = props.alpha * (0.8 + Math.random() * 0.4); // Vary alpha slightly
+                }
+                ctx.lineWidth = LWidth;
+                ctx.lineTo(currentPos.x, currentPos.y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(currentPos.x, currentPos.y);
+                if (currentPenType === 'pencil') ctx.globalAlpha = props.alpha; // Reset alpha
+            }
+            lastPos = currentPos;
+        }
+        
+        function animateLaser() {
+            const dpr = window.devicePixelRatio || 1;
+            // Clear only the area needed for laser strokes OR redraw main canvas then laser strokes
+            // For simplicity, let's redraw the last history state, then laser strokes.
+            if (history.length > 0) {
+                 const img = new Image();
+                 img.onload = () => {
+                    ctx.fillStyle = currentBackgroundColor; // Ensure BG is correct before drawing history image
+                    ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+                    ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
+                    drawCurrentLaserFrame();
+                 }
+                 img.src = history[history.length - 1]; // Get last saved state
+            } else { // No history, just clear to BG
+                ctx.fillStyle = currentBackgroundColor;
+                ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+                drawCurrentLaserFrame();
+            }
+        }
+
+        function drawCurrentLaserFrame() {
+            const now = Date.now();
+            const props = penProperties.laser_pointer;
+
+            // Draw active laser stroke if any
+            if (currentLaserStroke) {
+                drawLaserPath(currentLaserStroke, now);
+            }
+
+            // Draw committed laser strokes and manage fading
+            laserStrokes = laserStrokes.filter(stroke => {
+                const age = now - stroke.lastActivity; // Fade based on inactivity
+                if (age > props.duration) return false; // Remove if completely faded due to inactivity
+                
+                const timeSinceCreation = now - stroke.created;
+                stroke.opacity = 1 - (timeSinceCreation / (props.duration * 1.5)); // Fade out over time regardless of activity once committed
+
+                if (stroke.opacity <= 0) return false; // Remove if faded
+                
+                drawLaserPath(stroke, now);
+                return true;
+            });
+
+            if (laserStrokes.length > 0 || currentLaserStroke) {
+                requestAnimationFrame(animateLaser);
+            }
+        }
+        
+        function drawLaserPath(stroke, now) {
+            const props = penProperties.laser_pointer;
+            ctx.beginPath();
+            ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+            for (let i = 1; i < stroke.points.length; i++) {
+                ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+            }
+            // Flashing effect
+            const flashOpacity = (Math.floor(now / props.flashInterval) % 2 === 0) ? 1 : 0.7;
+            ctx.strokeStyle = props.color;
+            ctx.lineWidth = stroke.width;
+            ctx.globalAlpha = stroke.opacity * flashOpacity;
+            ctx.lineCap = props.cap;
+            ctx.lineJoin = props.join;
+            ctx.stroke();
+            ctx.globalAlpha = penProperties[currentPenType]?.alpha || 1; // Reset alpha
+        }
+
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseleave', stopDrawing);
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchcancel', stopDrawing, { passive: false });
+
+        function saveHistory(clearRedo = true) {
+            if (currentPenType === 'laser_pointer') return; // Don't save laser strokes to history
+            if (canvas.width > 0 && canvas.height > 0) {
+                if (history.length >= historyLimit) history.shift();
+                history.push(canvas.toDataURL());
+                if (clearRedo) redoHistory = [];
+                updateUndoRedoButtons();
+            }
+        }
+        function restoreState(dataURL) {
+            const img = new Image();
+            const dpr = window.devicePixelRatio || 1;
+            img.onload = () => {
+                setInitialCanvasState(); // Clears to current BG and sets pen styles
+                ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
+            };
+            img.src = dataURL;
+        }
+        function updateUndoRedoButtons() { undoButton.disabled = history.length <= 1; redoButton.disabled = redoHistory.length === 0; }
+
+        undoButton.addEventListener('click', () => { if (history.length > 1) { redoHistory.push(history.pop()); restoreState(history[history.length - 1]); updateUndoRedoButtons(); } });
+        redoButton.addEventListener('click', () => { if (redoHistory.length > 0) { const nextState = redoHistory.pop(); history.push(nextState); restoreState(nextState); updateUndoRedoButtons(); } });
+        
+        clearButton.addEventListener('click', () => {
+            if (confirm("Are you sure you want to clear the drawing?")) {
+                setInitialCanvasState(true); // True to clear history and save new blank state
+                descriptionArea.textContent = "Canvas cleared.";
+                laserStrokes = []; // Also clear any active laser strokes
+            }
+        });
+
+        const aiResponses = [
+            "This appears to be a masterpiece of abstract expressionism!", "I see bold lines and a creative use of color. Fascinating!",
+            "Aha! Is that a [cat/dog/house/tree]? My algorithms are intrigued!", "This reminds me of the early works of Picasso, if Picasso had a mouse.",
+            "Hmm, complex. This could be a map to a hidden treasure, or perhaps a grocery list.", "The energy in this piece is palpable. What inspired this creation?",
+            "I'm detecting strong artistic intent. Keep up the great work!", "This drawing has a certain je ne sais quoi. Or maybe it's just a squiggle. Either way, I like it!"
+        ];
+        let isDescribing = false;
+        describeButton.addEventListener('click', () => {
+            if (isDescribing) return; isDescribing = true;
+            const originalButtonText = describeButton.innerHTML;
+            describeButton.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Describing...';
+            describeButton.disabled = true; descriptionArea.textContent = "Analyzing your artwork...";
+            setTimeout(() => {
+                const randomIndex = Math.floor(Math.random() * aiResponses.length);
+                descriptionArea.textContent = aiResponses[randomIndex];
+                describeButton.innerHTML = originalButtonText; describeButton.disabled = false; isDescribing = false;
+            }, 1500 + Math.random() * 1000);
+        });
+        
+        window.addEventListener('load', () => {
+            setupQuickColorPalette();
+            penTypeSelector.value = currentPenType;
+            updatePenIcon();
+            updateLineWidthDisplay();
+            lineWidthSlider.disabled = currentPenType === 'laser_pointer';
+            canvasBgColorPicker.value = currentBackgroundColor;
+            tempBackgroundColor = currentBackgroundColor; // Initialize temp BG color
+            
+            setTimeout(() => {
+                resizeCanvas(); // This will also handle initial history save if needed
+            }, 50); // Ensure layout is stable
+        });
+    </script>
+</body>
+</html>
