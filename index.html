@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Drawing Pad Pro - Advanced V2.2 (Tool Preview)</title>
+    <title>Drawing Pad Pro - Advanced V2.3 (Robust Clear)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -73,27 +73,16 @@
         .tool-control input[type="color"]::-webkit-color-swatch { border: 1px solid #d1d5db; border-radius: 50%; }
 
         .canvas-area {
-            flex-grow: 1; position: relative; background-color: #d1d5db; /* Area around canvas */
-            display: flex; /* For centering canvas if needed */
-            overflow: hidden; /* Prevent scrollbars if canvas is too big */
+            flex-grow: 1; position: relative; background-color: #d1d5db;
+            display: flex; overflow: hidden;
         }
         #drawingCanvas {
-            display: block; /* Removes extra space below if inline */
-            cursor: crosshair; 
-            touch-action: none; /* Crucial for drawing without page scroll/zoom */
-            max-width: 100%; /* Ensure it doesn't overflow parent */
-            max-height: 100%;
-            margin: auto; /* Center canvas within .canvas-area if smaller */
+            display: block; cursor: crosshair; touch-action: none;
+            max-width: 100%; max-height: 100%; margin: auto;
         }
-        #previewCanvas { /* New canvas for tool preview */
-            position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: none; /* Allows clicks to pass through to drawingCanvas */
-            /* Dimensions will be set by JS to match drawingCanvas */
-             /* display: none; Initially hidden or managed by JS */
+        #previewCanvas {
+            position: absolute; top: 0; left: 0; pointer-events: none;
         }
-
 
         .bottom-controls {
             display: flex; justify-content: space-between; align-items: center;
@@ -162,7 +151,8 @@
 
         <div class="canvas-area">
             <canvas id="drawingCanvas"></canvas>
-            <canvas id="previewCanvas"></canvas> </div>
+            <canvas id="previewCanvas"></canvas>
+        </div>
 
         <div class="bottom-controls">
             <div id="describeButtonContainer">
@@ -177,10 +167,8 @@
     <script>
         const canvas = document.getElementById('drawingCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        // Preview Canvas Setup
         const previewCanvas = document.getElementById('previewCanvas');
         const previewCtx = previewCanvas.getContext('2d');
-
 
         let drawing = false;
         let currentQuickSelectColors = ['#000000', '#EF4444', '#3B82F6'];
@@ -225,9 +213,24 @@
 
         function setInitialCanvasState(clearHistoryAndSave = false) {
             const dpr = window.devicePixelRatio || 1;
+            
+            // Save current context state that might affect fillRect
+            const originalCompositeOp = ctx.globalCompositeOperation;
+            const originalAlpha = ctx.globalAlpha;
+
+            // Ensure fillRect is as 'clean' as possible for a full clear
+            ctx.globalCompositeOperation = 'source-over'; // Default, ensures drawing over existing
+            ctx.globalAlpha = 1.0; // Ensure full opacity for the fill
+            
             ctx.fillStyle = currentBackgroundColor;
             ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-            applyCurrentPenStyle();
+
+            // Restore previous context state before applying pen style
+            ctx.globalCompositeOperation = originalCompositeOp;
+            ctx.globalAlpha = originalAlpha;
+
+            applyCurrentPenStyle(); // Apply current pen style for subsequent operations
+
             if (clearHistoryAndSave) {
                 history = []; redoHistory = [];
                 saveHistory();
@@ -239,7 +242,7 @@
             const props = penProperties[currentPenType];
             if (currentPenType === 'eraser') {
                 ctx.strokeStyle = currentBackgroundColor;
-                ctx.globalAlpha = 1;
+                ctx.globalAlpha = 1; // Eraser is fully opaque
             } else if (currentPenType === 'laser_pointer') {
                 ctx.strokeStyle = props.color;
                 ctx.globalAlpha = props.alpha;
@@ -255,18 +258,15 @@
             penIconLabel.innerHTML = `<i class="fas ${penIcons[currentPenType]}"></i>`;
         }
         
-        // Function to resize the preview canvas
         function resizePreviewCanvas() {
             const canvasArea = document.querySelector('.canvas-area');
             const dpr = window.devicePixelRatio || 1;
-            
             previewCanvas.width = canvasArea.clientWidth * dpr;
             previewCanvas.height = canvasArea.clientHeight * dpr;
             previewCanvas.style.width = `${canvasArea.clientWidth}px`;
             previewCanvas.style.height = `${canvasArea.clientHeight}px`;
-            previewCtx.scale(dpr, dpr); // Scale context for HiDPI rendering
+            previewCtx.scale(dpr, dpr);
         }
-
 
         function resizeCanvas() {
             const canvasArea = document.querySelector('.canvas-area');
@@ -279,9 +279,7 @@
             canvas.style.height = `${canvasArea.clientHeight}px`;
             ctx.scale(dpr, dpr);
 
-            // Resize preview canvas whenever main canvas is resized
             resizePreviewCanvas(); 
-
             setInitialCanvasState();
             
             if (tempImageData) {
@@ -349,14 +347,12 @@
             if (sizeLabel) {
                 sizeLabel.title = currentPenType === 'eraser' ? 'Eraser Size' : 'Brush Size';
             }
-            // Clear preview when tool changes, next mousemove will redraw if applicable
             clearToolPreview(); 
         });
 
         lineWidthSlider.addEventListener('input', (e) => {
             currentLineWidth = e.target.value;
             updateLineWidthDisplay();
-            // Clear preview when size changes, next mousemove will redraw
             clearToolPreview(); 
         });
         function updateLineWidthDisplay() { lineWidthValueDisplay.textContent = currentLineWidth; }
@@ -382,18 +378,15 @@
             const rect = canvas.getBoundingClientRect();
             const clientX = evt.clientX || (evt.touches && evt.touches[0] ? evt.touches[0].clientX : 0);
             const clientY = evt.clientY || (evt.touches && evt.touches[0] ? evt.touches[0].clientY : 0);
-            // These are CSS pixel coordinates relative to the canvas element
             return { x: clientX - rect.left, y: clientY - rect.top };
         }
         
-        // --- Tool Preview Logic ---
         function drawToolPreview(cssX, cssY) {
             if (currentPenType === 'laser_pointer' || drawing) {
                 clearToolPreview();
                 return;
             }
             const dpr = window.devicePixelRatio || 1;
-            // Clear using CSS dimensions because context is scaled
             previewCtx.clearRect(0, 0, previewCanvas.width / dpr, previewCanvas.height / dpr);
 
             const props = penProperties[currentPenType];
@@ -404,11 +397,11 @@
             } else if (currentPenType === 'pencil') {
                  previewRadius = (parseFloat(currentLineWidth) * props.baseWidth * 0.8) / 2;
             }
-             previewRadius = Math.max(1 / dpr, previewRadius); // Ensure min radius of 1 physical pixel
+             previewRadius = Math.max(1 / dpr, previewRadius);
 
             previewCtx.beginPath();
-            previewCtx.arc(cssX, cssY, previewRadius, 0, Math.PI * 2); // cssX, cssY are already in CSS pixels
-            previewCtx.fillStyle = 'rgba(100, 100, 100, 0.25)'; // Semi-transparent gray
+            previewCtx.arc(cssX, cssY, previewRadius, 0, Math.PI * 2);
+            previewCtx.fillStyle = 'rgba(100, 100, 100, 0.25)';
             previewCtx.fill();
         }
 
@@ -417,13 +410,12 @@
             previewCtx.clearRect(0, 0, previewCanvas.width / dpr, previewCanvas.height / dpr);
         }
 
-
         function startDrawing(e) {
             e.preventDefault();
             drawing = true;
             lastPos = getPointerPos(e);
             applyCurrentPenStyle();
-            clearToolPreview(); // Hide preview when drawing starts
+            clearToolPreview();
             
             if (currentPenType === 'laser_pointer') {
                 const props = penProperties.laser_pointer;
@@ -454,20 +446,17 @@
                 ctx.beginPath();
                 saveHistory();
             }
-            // Potentially redraw preview if mouse is still over canvas (handled by next mousemove)
         }
 
-        function draw(e) { // This is the main drawing function called on mousemove while drawing
-            if (!drawing) return; // Only draw if drawing flag is true
-            // e.preventDefault(); // Already called in startDrawing for touch, might be redundant here
-
+        function draw(e) {
+            if (!drawing) return;
             const currentPos = getPointerPos(e);
-            if (!lastPos) { lastPos = currentPos; return; } // Should be set by startDrawing
+            if (!lastPos) { lastPos = currentPos; return; }
 
             if (currentPenType === 'laser_pointer' && currentLaserStroke) {
                 currentLaserStroke.points.push(currentPos);
                 currentLaserStroke.lastActivity = Date.now();
-            } else { // For all other pens including eraser
+            } else {
                 const props = penProperties[currentPenType];
                 let LWidth = parseFloat(currentLineWidth) * props.baseWidth;
                 let tempAlpha = ctx.globalAlpha;
@@ -484,7 +473,7 @@
                 ctx.lineWidth = LWidth;
                 ctx.lineTo(currentPos.x, currentPos.y);
                 ctx.stroke();
-                ctx.beginPath(); // Start new path for next segment
+                ctx.beginPath();
                 ctx.moveTo(currentPos.x, currentPos.y);
                 
                 if (currentPenType === 'pencil') {
@@ -496,18 +485,44 @@
         
         function animateLaser() {
             const dpr = window.devicePixelRatio || 1;
+            const oldAlpha = ctx.globalAlpha;
+            const oldCompOp = ctx.globalCompositeOperation;
+            
+            // Ensure operations for clearing/drawing history are fully opaque and overwrite
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+
             if (history.length > 0) {
                  const img = new Image();
                  img.onload = () => {
+                    ctx.globalAlpha = 1.0; // Ensure alpha is 1 before drawing
+                    ctx.globalCompositeOperation = 'source-over';
                     ctx.fillStyle = currentBackgroundColor;
                     ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
                     ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
+                    
+                    ctx.globalAlpha = oldAlpha; // Restore for laser drawing
+                    ctx.globalCompositeOperation = oldCompOp;
+                    drawCurrentLaserFrame();
+                 }
+                 img.onerror = () => { // Fallback if image load fails
+                    ctx.globalAlpha = 1.0;
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.fillStyle = currentBackgroundColor;
+                    ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+                    ctx.globalAlpha = oldAlpha;
+                    ctx.globalCompositeOperation = oldCompOp;
                     drawCurrentLaserFrame();
                  }
                  img.src = history[history.length - 1];
             } else {
+                ctx.globalAlpha = 1.0;
+                ctx.globalCompositeOperation = 'source-over';
                 ctx.fillStyle = currentBackgroundColor;
                 ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+                
+                ctx.globalAlpha = oldAlpha;
+                ctx.globalCompositeOperation = oldCompOp;
                 drawCurrentLaserFrame();
             }
         }
@@ -549,21 +564,19 @@
             applyCurrentPenStyle(); 
         }
 
-        // Main canvas event listeners
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mousemove', (e) => {
             if (drawing) {
-                draw(e); // Call main draw function if actively drawing
+                draw(e);
             } else {
-                // If not drawing, update tool preview
                 const pos = getPointerPos(e);
                 drawToolPreview(pos.x, pos.y);
             }
         });
         canvas.addEventListener('mouseleave', (e) => {
-            clearToolPreview(); // Clear preview when mouse leaves canvas
-            if (drawing) { // If mouse leaves while drawing, stop the drawing
+            clearToolPreview();
+            if (drawing) {
                 stopDrawing(e);
             }
         });
@@ -573,14 +586,11 @@
             if (drawing) {
                 draw(e);
             } else {
-                // For touch, preview might not be as useful or could be distracting.
-                // For now, let's keep it consistent, but it might be removed for touch.
                 const pos = getPointerPos(e);
                 drawToolPreview(pos.x, pos.y);
             }
         }, { passive: false });
         canvas.addEventListener('touchcancel', stopDrawing, { passive: false });
-
 
         function saveHistory(clearRedo = true) {
             if (currentPenType === 'laser_pointer') return;
@@ -643,7 +653,7 @@
             tempBackgroundColor = currentBackgroundColor;
             
             setTimeout(() => {
-                resizeCanvas(); // This also calls resizePreviewCanvas
+                resizeCanvas();
             }, 50);
         });
     </script>
