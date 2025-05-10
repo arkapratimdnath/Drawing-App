@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Drawing Pad Pro - Advanced V2</title>
+    <title>Drawing Pad Pro - Advanced V2.1 (Eraser)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -28,19 +28,19 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 8px 12px; /* Slightly reduced padding */
+            padding: 8px 12px;
             background-color: #ffffff;
             border-bottom: 1px solid #d1d5db; /* gray-300 */
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             flex-shrink: 0;
             flex-wrap: wrap;
-            gap: 8px; /* Reduced gap */
+            gap: 8px;
         }
 
         .toolbar-group { display: flex; align-items: center; gap: 8px; }
 
         #quickColorPalette .color-swatch {
-            width: 24px; height: 24px; /* Slightly smaller */
+            width: 24px; height: 24px;
             border-radius: 50%; cursor: pointer; border: 2px solid #d1d5db;
             transition: transform 0.2s, box-shadow 0.2s; position: relative;
         }
@@ -79,7 +79,6 @@
         #drawingCanvas {
             display: block; cursor: crosshair; touch-action: none;
             max-width: 100%; max-height: 100%; margin: auto;
-            /* background-color is set by JS */
         }
 
         .bottom-controls {
@@ -125,12 +124,13 @@
                     <option value="brush">Brush</option>
                     <option value="ball_pen">Ball Pen</option>
                     <option value="sketch_pen">Sketch Pen</option>
+                    <option value="eraser">Eraser</option>
                     <option value="laser_pointer">Laser Pointer</option>
                 </select>
             </div>
             <div class="toolbar-group">
                 <div class="tool-control brush-size-control">
-                    <label for="lineWidth" title="Brush Size"><i class="fas fa-paint-brush"></i></label>
+                    <label for="lineWidth" title="Brush/Eraser Size"><i class="fas fa-paint-brush"></i></label>
                     <input type="range" id="lineWidth" min="1" max="100" value="5">
                     <span id="lineWidthValue">5</span>
                 </div>
@@ -170,13 +170,12 @@
         let currentPenType = 'fountain_pen';
         let currentLineWidth = 5;
         let currentBackgroundColor = '#FFFFFF';
-        let tempBackgroundColor = currentBackgroundColor; // For BG color picker logic
+        let tempBackgroundColor = currentBackgroundColor;
 
         let history = [];
         let redoHistory = [];
         const historyLimit = 30;
-
-        let laserStrokes = []; // For laser pointer
+        let laserStrokes = [];
 
         const quickColorPaletteEl = document.getElementById('quickColorPalette');
         const penTypeSelector = document.getElementById('penTypeSelector');
@@ -192,7 +191,8 @@
 
         const penIcons = {
             pencil: 'fa-pencil-alt', brush: 'fa-paint-brush', fountain_pen: 'fa-pen-fancy',
-            ball_pen: 'fa-pen', sketch_pen: 'fa-marker', laser_pointer: 'fa-magic' // Or fa-bolt, fa-crosshairs
+            ball_pen: 'fa-pen', sketch_pen: 'fa-marker', eraser: 'fa-eraser', 
+            laser_pointer: 'fa-magic'
         };
 
         const penProperties = {
@@ -201,30 +201,36 @@
             fountain_pen: { baseWidth: 1, alpha: 0.95, cap: 'round', join: 'round', detail: 0.6, minWidthFactor: 0.3 },
             ball_pen: { baseWidth: 0.4, alpha: 0.9, cap: 'round', join: 'round', detail: 0 },
             sketch_pen: { baseWidth: 1.8, alpha: 0.45, cap: 'butt', join: 'miter', detail: 0 },
-            laser_pointer: { baseWidth: 0.8, alpha: 1, cap: 'round', join: 'round', color: '#FF007F', duration: 2000, flashInterval: 200 } // Hot pink, 2s duration
+            eraser: { baseWidth: 2.5, alpha: 1, cap: 'round', join: 'round', detail: 0 }, // Eraser uses background color
+            laser_pointer: { baseWidth: 0.8, alpha: 1, cap: 'round', join: 'round', color: '#FF007F', duration: 2000, flashInterval: 200 }
         };
 
         function setInitialCanvasState(clearHistoryAndSave = false) {
             const dpr = window.devicePixelRatio || 1;
-            // Clear with current background color
             ctx.fillStyle = currentBackgroundColor;
-            ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr); // Use scaled dimensions for fillRect
+            ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
             applyCurrentPenStyle();
-
             if (clearHistoryAndSave) {
                 history = []; redoHistory = [];
-                saveHistory();
+                saveHistory(); // Save the blank state
                 updateUndoRedoButtons();
             }
         }
 
         function applyCurrentPenStyle() {
             const props = penProperties[currentPenType];
-            ctx.strokeStyle = (currentPenType === 'laser_pointer') ? props.color : selectedColor;
-            ctx.globalAlpha = props.alpha;
+            if (currentPenType === 'eraser') {
+                ctx.strokeStyle = currentBackgroundColor; // Key change for eraser
+                ctx.globalAlpha = 1; // Eraser is fully opaque
+            } else if (currentPenType === 'laser_pointer') {
+                ctx.strokeStyle = props.color;
+                ctx.globalAlpha = props.alpha;
+            } else {
+                ctx.strokeStyle = selectedColor;
+                ctx.globalAlpha = props.alpha;
+            }
             ctx.lineCap = props.cap;
             ctx.lineJoin = props.join;
-            // Line width is handled dynamically in draw functions
         }
 
         function updatePenIcon() {
@@ -233,7 +239,6 @@
 
         function resizeCanvas() {
             const canvasArea = document.querySelector('.canvas-area');
-            // Preserve content only if history exists (i.e., not initial blank state)
             const tempImageData = history.length > 0 ? preserveCanvasContent() : null;
             
             const dpr = window.devicePixelRatio || 1;
@@ -243,22 +248,19 @@
             canvas.style.height = `${canvasArea.clientHeight}px`;
             ctx.scale(dpr, dpr);
 
-            setInitialCanvasState(); // This clears to current BG and sets styles
+            setInitialCanvasState();
             
             if (tempImageData) {
                 restoreCanvasContent(tempImageData);
-                // Re-save the restored state as the current state in history to reflect new dimensions
-                if (history.length > 0) { // Only if there was something to restore
+                if (history.length > 0) {
                     history[history.length -1] = canvas.toDataURL();
                 }
             } else if (history.length === 0 && canvas.width > 0 && canvas.height > 0) {
-                // If history was empty, save the initial blank state for the new size
                 saveHistory(true);
             }
             updateUndoRedoButtons();
         }
         
-        function isCanvasBlank() { return history.length === 0; } // Simplified
         function preserveCanvasContent() { if (canvas.width > 0 && canvas.height > 0) { return ctx.getImageData(0, 0, canvas.width, canvas.height); } return null; }
         function restoreCanvasContent(imageData) { if (imageData) { ctx.putImageData(imageData, 0, 0); } }
         
@@ -278,7 +280,7 @@
                 hiddenInput.type = 'color';
                 hiddenInput.classList.add('hidden-color-input');
                 hiddenInput.value = color;
-                let tempQuickColor = color; // Store color during picker interaction
+                let tempQuickColor = color;
 
                 swatch.addEventListener('click', () => {
                     selectedColor = color;
@@ -288,15 +290,13 @@
                 });
                 swatch.addEventListener('dblclick', () => hiddenInput.click());
                 
-                hiddenInput.addEventListener('input', (e) => { // Fires as user drags picker
-                    tempQuickColor = e.target.value;
-                });
-                hiddenInput.addEventListener('change', (e) => { // Fires when picker is closed
-                    const newColor = tempQuickColor; // Use the last color from 'input'
+                hiddenInput.addEventListener('input', (e) => { tempQuickColor = e.target.value; });
+                hiddenInput.addEventListener('change', (e) => {
+                    const newColor = tempQuickColor;
                     currentQuickSelectColors[index] = newColor;
                     swatch.style.backgroundColor = newColor;
-                    hiddenInput.value = newColor; // Update picker's internal value
-                    if (swatch.classList.contains('selected')) { // If this was the active color
+                    hiddenInput.value = newColor;
+                    if (swatch.classList.contains('selected')) {
                         selectedColor = newColor;
                         applyCurrentPenStyle();
                     }
@@ -310,32 +310,30 @@
             currentPenType = e.target.value;
             applyCurrentPenStyle();
             updatePenIcon();
-            // Disable line width for laser pointer as it has fixed appearance
             lineWidthSlider.disabled = currentPenType === 'laser_pointer';
+            // Update title of brush/eraser size slider
+            const sizeLabel = lineWidthSlider.parentElement.querySelector('label');
+            if (sizeLabel) {
+                sizeLabel.title = currentPenType === 'eraser' ? 'Eraser Size' : 'Brush Size';
+            }
         });
 
         lineWidthSlider.addEventListener('input', (e) => {
             currentLineWidth = e.target.value;
             updateLineWidthDisplay();
-            // No need to applyCurrentPenStyle() here, width is used in draw functions
         });
         function updateLineWidthDisplay() { lineWidthValueDisplay.textContent = currentLineWidth; }
 
-        canvasBgColorPicker.addEventListener('input', (e) => { // Fires as user drags picker
-            tempBackgroundColor = e.target.value;
-            // Optionally, preview BG change live:
-            // canvas.style.backgroundColor = tempBackgroundColor; // Or fill a temp canvas
-        });
-        canvasBgColorPicker.addEventListener('change', (e) => { // Fires when picker is closed
-            const newBgColor = tempBackgroundColor; // Use the last color from 'input'
+        canvasBgColorPicker.addEventListener('input', (e) => { tempBackgroundColor = e.target.value; });
+        canvasBgColorPicker.addEventListener('change', (e) => {
+            const newBgColor = tempBackgroundColor;
             if (newBgColor !== currentBackgroundColor) {
                 if (confirm(`Change background to ${newBgColor}? This will clear the current drawing.`)) {
                     currentBackgroundColor = newBgColor;
-                    setInitialCanvasState(true); // True to clear history and save new blank state
+                    setInitialCanvasState(true);
                 } else {
-                    // Revert picker if cancelled
                     canvasBgColorPicker.value = currentBackgroundColor;
-                    tempBackgroundColor = currentBackgroundColor; // Reset temp
+                    tempBackgroundColor = currentBackgroundColor;
                 }
             }
         });
@@ -354,21 +352,21 @@
             e.preventDefault();
             drawing = true;
             lastPos = getPointerPos(e);
-            applyCurrentPenStyle();
+            applyCurrentPenStyle(); // Crucial to apply style, especially for eraser's color and alpha
             
             if (currentPenType === 'laser_pointer') {
                 const props = penProperties.laser_pointer;
-                currentLaserStroke = { points: [lastPos], color: props.color, width: currentLineWidth * props.baseWidth, created: Date.now(), opacity: 1, lastActivity: Date.now() };
-                if (laserStrokes.length === 0) requestAnimationFrame(animateLaser); // Start animation loop if not running
+                currentLaserStroke = { points: [lastPos], color: props.color, width: parseFloat(currentLineWidth) * props.baseWidth, created: Date.now(), opacity: 1, lastActivity: Date.now() };
+                if (laserStrokes.length === 0 && !currentLaserStroke.animationFrameId) requestAnimationFrame(animateLaser);
             } else {
                 ctx.beginPath();
                 ctx.moveTo(lastPos.x, lastPos.y);
-                // Draw a dot for single tap/click for non-laser pens
                 const props = penProperties[currentPenType];
                 let LWidth = parseFloat(currentLineWidth) * props.baseWidth;
                 if (currentPenType === 'fountain_pen') {
-                     LWidth = Math.max(1, LWidth * (props.detail * 0.8 + (1 - props.detail))); // Adjusted dot for fountain
+                     LWidth = Math.max(1, LWidth * (props.detail * 0.8 + (1 - props.detail)));
                 }
+                // For eraser, LWidth is calculated using its baseWidth. StrokeStyle and Alpha are already set by applyCurrentPenStyle.
                 ctx.lineWidth = LWidth;
                 ctx.lineTo(lastPos.x, lastPos.y);
                 ctx.stroke();
@@ -383,7 +381,7 @@
                 laserStrokes.push(currentLaserStroke);
                 currentLaserStroke = null;
             } else if (currentPenType !== 'laser_pointer') {
-                ctx.beginPath(); // Reset path for next stroke
+                ctx.beginPath();
                 saveHistory();
             }
         }
@@ -396,44 +394,47 @@
 
             if (currentPenType === 'laser_pointer' && currentLaserStroke) {
                 currentLaserStroke.points.push(currentPos);
-                currentLaserStroke.lastActivity = Date.now(); // Update activity time
-                // Laser is drawn in animateLaser loop
+                currentLaserStroke.lastActivity = Date.now();
             } else {
                 const props = penProperties[currentPenType];
                 let LWidth = parseFloat(currentLineWidth) * props.baseWidth;
+                let tempAlpha = ctx.globalAlpha; // Store current alpha set by applyCurrentPenStyle
 
                 if (currentPenType === 'fountain_pen') {
                     const dist = Math.sqrt(Math.pow(currentPos.x - lastPos.x, 2) + Math.pow(currentPos.y - lastPos.y, 2));
-                    const speedFactor = Math.min(1.5, Math.max(props.minWidthFactor, 1 - dist / (50 / props.detail) )); // More sensitive variation
+                    const speedFactor = Math.min(1.5, Math.max(props.minWidthFactor, 1 - dist / (50 / props.detail) ));
                     LWidth = Math.max(1, LWidth * speedFactor);
                 } else if (currentPenType === 'pencil') {
                     LWidth = Math.max(1, LWidth * (1 + (Math.random() - 0.5) * props.jitter));
-                    ctx.globalAlpha = props.alpha * (0.8 + Math.random() * 0.4); // Vary alpha slightly
+                    ctx.globalAlpha = tempAlpha * (0.8 + Math.random() * 0.4); // Vary from base alpha
                 }
+                // Eraser uses LWidth from its baseWidth, strokeStyle (BG color) and alpha (1) are set by applyCurrentPenStyle
+
                 ctx.lineWidth = LWidth;
                 ctx.lineTo(currentPos.x, currentPos.y);
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.moveTo(currentPos.x, currentPos.y);
-                if (currentPenType === 'pencil') ctx.globalAlpha = props.alpha; // Reset alpha
+                
+                if (currentPenType === 'pencil') { // Reset alpha if it was varied for the segment
+                    ctx.globalAlpha = tempAlpha; 
+                }
             }
             lastPos = currentPos;
         }
         
         function animateLaser() {
             const dpr = window.devicePixelRatio || 1;
-            // Clear only the area needed for laser strokes OR redraw main canvas then laser strokes
-            // For simplicity, let's redraw the last history state, then laser strokes.
             if (history.length > 0) {
                  const img = new Image();
                  img.onload = () => {
-                    ctx.fillStyle = currentBackgroundColor; // Ensure BG is correct before drawing history image
+                    ctx.fillStyle = currentBackgroundColor;
                     ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
                     ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
                     drawCurrentLaserFrame();
                  }
-                 img.src = history[history.length - 1]; // Get last saved state
-            } else { // No history, just clear to BG
+                 img.src = history[history.length - 1];
+            } else {
                 ctx.fillStyle = currentBackgroundColor;
                 ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
                 drawCurrentLaserFrame();
@@ -442,24 +443,17 @@
 
         function drawCurrentLaserFrame() {
             const now = Date.now();
-            const props = penProperties.laser_pointer;
+            const laserProps = penProperties.laser_pointer;
 
-            // Draw active laser stroke if any
-            if (currentLaserStroke) {
-                drawLaserPath(currentLaserStroke, now);
-            }
-
-            // Draw committed laser strokes and manage fading
+            if (currentLaserStroke) drawLaserPath(currentLaserStroke, now, laserProps);
+            
             laserStrokes = laserStrokes.filter(stroke => {
-                const age = now - stroke.lastActivity; // Fade based on inactivity
-                if (age > props.duration) return false; // Remove if completely faded due to inactivity
-                
+                const age = now - stroke.lastActivity;
+                if (age > laserProps.duration) return false;
                 const timeSinceCreation = now - stroke.created;
-                stroke.opacity = 1 - (timeSinceCreation / (props.duration * 1.5)); // Fade out over time regardless of activity once committed
-
-                if (stroke.opacity <= 0) return false; // Remove if faded
-                
-                drawLaserPath(stroke, now);
+                stroke.opacity = 1 - (timeSinceCreation / (laserProps.duration * 1.5));
+                if (stroke.opacity <= 0) return false;
+                drawLaserPath(stroke, now, laserProps);
                 return true;
             });
 
@@ -468,24 +462,22 @@
             }
         }
         
-        function drawLaserPath(stroke, now) {
-            const props = penProperties.laser_pointer;
+        function drawLaserPath(stroke, now, props) {
             ctx.beginPath();
             ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
             for (let i = 1; i < stroke.points.length; i++) {
                 ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
             }
-            // Flashing effect
             const flashOpacity = (Math.floor(now / props.flashInterval) % 2 === 0) ? 1 : 0.7;
             ctx.strokeStyle = props.color;
             ctx.lineWidth = stroke.width;
-            ctx.globalAlpha = stroke.opacity * flashOpacity;
+            ctx.globalAlpha = stroke.opacity * flashOpacity; // Apply stroke's own opacity and flash
             ctx.lineCap = props.cap;
             ctx.lineJoin = props.join;
             ctx.stroke();
-            ctx.globalAlpha = penProperties[currentPenType]?.alpha || 1; // Reset alpha
+            // Reset globalAlpha to what it should be for the *selected tool*, not just 1
+            applyCurrentPenStyle(); // This will reset alpha based on currentPenType
         }
-
 
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mouseup', stopDrawing);
@@ -497,7 +489,7 @@
         canvas.addEventListener('touchcancel', stopDrawing, { passive: false });
 
         function saveHistory(clearRedo = true) {
-            if (currentPenType === 'laser_pointer') return; // Don't save laser strokes to history
+            if (currentPenType === 'laser_pointer') return;
             if (canvas.width > 0 && canvas.height > 0) {
                 if (history.length >= historyLimit) history.shift();
                 history.push(canvas.toDataURL());
@@ -509,7 +501,7 @@
             const img = new Image();
             const dpr = window.devicePixelRatio || 1;
             img.onload = () => {
-                setInitialCanvasState(); // Clears to current BG and sets pen styles
+                setInitialCanvasState(); // Clears to current BG, applies current pen style (alpha, etc.)
                 ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
             };
             img.src = dataURL;
@@ -521,9 +513,9 @@
         
         clearButton.addEventListener('click', () => {
             if (confirm("Are you sure you want to clear the drawing?")) {
-                setInitialCanvasState(true); // True to clear history and save new blank state
+                setInitialCanvasState(true);
                 descriptionArea.textContent = "Canvas cleared.";
-                laserStrokes = []; // Also clear any active laser strokes
+                laserStrokes = [];
             }
         });
 
@@ -553,11 +545,11 @@
             updateLineWidthDisplay();
             lineWidthSlider.disabled = currentPenType === 'laser_pointer';
             canvasBgColorPicker.value = currentBackgroundColor;
-            tempBackgroundColor = currentBackgroundColor; // Initialize temp BG color
+            tempBackgroundColor = currentBackgroundColor;
             
             setTimeout(() => {
-                resizeCanvas(); // This will also handle initial history save if needed
-            }, 50); // Ensure layout is stable
+                resizeCanvas();
+            }, 50);
         });
     </script>
 </body>
